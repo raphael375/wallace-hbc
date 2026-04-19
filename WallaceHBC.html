@@ -8,6 +8,7 @@
 <meta name="theme-color" content="#c8102e"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Wallace HBC Legé</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -429,6 +430,7 @@ body{
         <div class="card">
           <button class="btn-danger" onclick="cancelLastGoal()">↩ Annuler le dernier but</button>
           <button class="btn-primary" onclick="endMatch()" style="margin-top:8px;background:#166534;">✓ Terminer le match</button>
+          <button class="btn-secondary" onclick="exportMatchPDF()" style="margin-top:8px;">📄 Exporter le récap PDF</button>
         </div>
       </div>
     </div>
@@ -450,10 +452,7 @@ body{
             <label>Lieu</label>
             <input id="setup-lieu" type="text" placeholder="ex : Salle de Legé (domicile)"/>
           </div>
-          <div class="field">
-            <label>Lien groupe WhatsApp (pour les alertes)</label>
-            <input id="setup-whatsapp" type="url" placeholder="https://chat.whatsapp.com/..."/>
-          </div>
+
           <button class="btn-primary" onclick="startMatch()" style="margin-top:4px;">🏁 Lancer le match</button>
           <button class="btn-danger" onclick="resetMatch()" style="margin-top:8px;">🗑 Effacer le match précédent</button>
         </div>
@@ -474,11 +473,7 @@ body{
             <span style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:#86efac;" id="arrets-count">0</span>
           </div>
         </div>
-        <div class="card">
-          <div class="card-title">🔔 ALERTES BUT</div>
-          <p style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:12px;">Rejoignez le groupe WhatsApp pour recevoir les alertes à chaque but.</p>
-          <button class="btn-secondary" id="wa-join-btn" onclick="joinWhatsapp()" style="margin-top:0;">📲 Rejoindre le groupe WhatsApp</button>
-        </div>
+
       </div>
     </div>
 
@@ -615,7 +610,6 @@ async function resetMatch() {
   // Clear setup fields
   document.getElementById('setup-adversaire').value = '';
   document.getElementById('setup-lieu').value = '';
-  document.getElementById('setup-whatsapp').value = '';
   document.getElementById('setup-date').value = new Date().toISOString().split('T')[0];
   showToast('Match effacé ✓ Prêt pour un nouveau match !');
   switchPage('setup');
@@ -662,7 +656,6 @@ async function addGoal(joueur) {
   await saveMatch({ score_home: scoreHome, goals, half: currentHalf });
   triggerGoalFlash(goal);
   updateUI();
-  sendWhatsappAlert(goal, scoreHome, match.score_away || 0);
   showToast(`BUT de ${joueur.nom} ! 🎯`);
 }
 
@@ -683,7 +676,6 @@ async function addGoalAway() {
   match.goals = goals;
   await saveMatch({ score_away: scoreAway, goals });
   updateUI();
-  sendWhatsappAlert(goal, match.score_home || 0, scoreAway);
   showToast(`But adverse — ${match.adversaire} ${scoreAway} 😤`);
 }
 
@@ -705,11 +697,6 @@ async function addArret() {
     flash.style.background = 'var(--red)';
     document.querySelector('.goal-flash-text').textContent = 'BUT !';
   }, 2000);
-  // WhatsApp alert for arret
-  if (match?.whatsapp_link) {
-    const msg = `🧤 ARRÊT DE GABIN (#12) !\n📊 HBC Legé ${match.score_home || 0} – ${match.score_away || 0} ${match.adversaire}\n🔢 Total arrêts : ${arrets}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-  }
   showToast(`Arrêt de Gabin ! 🧤 (${arrets})`);
 }
 
@@ -724,12 +711,104 @@ async function cancelLastGoal() {
   showToast('Dernier but annulé ↩');
 }
 
+function exportMatchPDF() {
+  if (!match) { showToast('Aucun match à exporter'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+
+  // Header rouge
+  doc.setFillColor(200, 16, 46);
+  doc.rect(0, 0, pageW, 35, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(22); doc.setFont(undefined, 'bold');
+  doc.text('WALLACE HBC LEGÉ', pageW/2, 14, { align: 'center' });
+  doc.setFontSize(11); doc.setFont(undefined, 'normal');
+  doc.text('Résumé du match', pageW/2, 22, { align: 'center' });
+  if (match.date) doc.text(new Date(match.date).toLocaleDateString('fr-FR', {weekday:'long',day:'numeric',month:'long',year:'numeric'}), pageW/2, 29, { align: 'center' });
+
+  // Score
+  doc.setTextColor(30, 30, 30);
+  doc.setFontSize(11); doc.setFont(undefined, 'normal');
+  doc.text('HBC Legé', 30, 50);
+  doc.text(match.adversaire || 'Adversaire', pageW - 30, 50, { align: 'right' });
+  doc.setFontSize(36); doc.setFont(undefined, 'bold');
+  doc.setTextColor(200, 16, 46);
+  doc.text(`${match.score_home} – ${match.score_away}`, pageW/2, 58, { align: 'center' });
+
+  // Lieu
+  if (match.lieu) {
+    doc.setFontSize(10); doc.setFont(undefined, 'normal'); doc.setTextColor(120,120,120);
+    doc.text(`📍 ${match.lieu}`, pageW/2, 66, { align: 'center' });
+  }
+
+  // Séparateur
+  doc.setDrawColor(200,16,46); doc.setLineWidth(0.5);
+  doc.line(20, 70, pageW-20, 70);
+
+  // Buteurs
+  let y = 80;
+  doc.setFontSize(13); doc.setFont(undefined, 'bold'); doc.setTextColor(200,16,46);
+  doc.text('⚽ BUTEURS HBC LEGÉ', 20, y); y += 8;
+
+  const goalsByPlayer = {};
+  goals.filter(g => g.team !== 'away').forEach(g => {
+    const key = `#${g.joueur_num} ${g.joueur_nom}`;
+    goalsByPlayer[key] = (goalsByPlayer[key] || 0) + 1;
+  });
+  const sorted = Object.entries(goalsByPlayer).sort((a,b) => b[1]-a[1]);
+
+  if (sorted.length === 0) {
+    doc.setFontSize(11); doc.setFont(undefined, 'normal'); doc.setTextColor(100,100,100);
+    doc.text('Aucun but', 25, y); y += 7;
+  } else {
+    sorted.forEach(([name, count]) => {
+      doc.setFontSize(12); doc.setFont(undefined, 'normal'); doc.setTextColor(30,30,30);
+      doc.text(`${name}`, 25, y);
+      doc.setFont(undefined, 'bold'); doc.setTextColor(200,16,46);
+      doc.text(`${count} but${count>1?'s':''}`, pageW-25, y, { align: 'right' });
+      doc.setFont(undefined, 'normal'); doc.setTextColor(30,30,30);
+      y += 8;
+    });
+  }
+
+  y += 4;
+  doc.setDrawColor(220,220,220); doc.setLineWidth(0.3);
+  doc.line(20, y, pageW-20, y); y += 10;
+
+  // Gardien
+  doc.setFontSize(13); doc.setFont(undefined, 'bold'); doc.setTextColor(22,101,52);
+  doc.text('🧤 GARDIEN — #12 GABIN', 20, y); y += 8;
+  doc.setFontSize(12); doc.setFont(undefined, 'normal'); doc.setTextColor(30,30,30);
+  doc.text(`Arrêts : ${match.arrets || 0}`, 25, y); y += 12;
+
+  // Chronologie
+  doc.setDrawColor(220,220,220); doc.line(20, y, pageW-20, y); y += 8;
+  doc.setFontSize(13); doc.setFont(undefined, 'bold'); doc.setTextColor(200,16,46);
+  doc.text('📋 CHRONOLOGIE', 20, y); y += 8;
+
+  goals.forEach(g => {
+    if (y > 270) { doc.addPage(); y = 20; }
+    const isAway = g.team === 'away';
+    doc.setFontSize(10); doc.setFont(undefined, 'normal');
+    doc.setTextColor(isAway ? 180 : 30, isAway ? 30 : 30, 30);
+    const label = isAway ? `  ${g.score_home}–${g.score_away}  But ${g.joueur_nom} (adv)` : `  ${g.score_home}–${g.score_away}  #${g.joueur_num} ${g.joueur_nom} — ${g.half===1?'1ère MT':'2ème MT'}`;
+    doc.text(label, 20, y); y += 6;
+  });
+
+  // Footer
+  doc.setFontSize(9); doc.setTextColor(150,150,150);
+  doc.text('#HBCLegé #Handball', pageW/2, 285, { align: 'center' });
+
+  doc.save(`HBC_Lege_${match.adversaire || 'match'}_${match.date || ''}.pdf`);
+  showToast('PDF téléchargé ! 📄');
+}
+
 async function endMatch() {
   if (!confirm('Terminer le match et envoyer le résumé ?')) return;
   await saveMatch({ status: 'finished' });
   match.status = 'finished';
   document.getElementById('live-badge').style.display = 'none';
-  sendFinalSummary();
   updateUI();
   showToast('Match terminé ! Résumé envoyé 🏆');
 }
@@ -743,30 +822,11 @@ function setHalf(h) {
 }
 
 // ─── WHATSAPP ────────────────────────────────────────────────
-function sendWhatsappAlert(goal, scoreHome, scoreAway) {
-  if (!match?.whatsapp_link) return;
-  const isAway = goal.team === 'away';
-  const msg = isAway
-    ? `😤 BUT DE ${goal.joueur_nom.toUpperCase()} !\n📊 HBC Legé ${scoreHome} – ${scoreAway} ${match.adversaire}\n📍 ${goal.half === 1 ? '1ère mi-temps' : '2ème mi-temps'}`
-    : `🤾 BUT DE ${goal.joueur_nom.toUpperCase()} (#${goal.joueur_num}) !\n📊 HBC Legé ${scoreHome} – ${scoreAway} ${match.adversaire}\n📍 ${goal.half === 1 ? '1ère mi-temps' : '2ème mi-temps'}`;
-  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-}
 
-function sendFinalSummary() {
-  if (!match?.whatsapp_link) return;
-  const stats = {};
-  goals.forEach(g => { stats[g.joueur_nom] = (stats[g.joueur_nom] || 0) + 1; });
-  const buteurs = Object.entries(stats).sort((a,b) => b[1]-a[1])
-    .map(([n,c]) => `  • ${n} : ${c} but${c>1?'s':''}`).join('\n');
-  const msg = `🏆 RÉSUMÉ DU MATCH\nHBC Legé ${match.score_home} – ${match.score_away} ${match.adversaire}\n\n⚽ Buteurs HBC :\n${buteurs || '  Aucun but'}${match.arrets ? '\n\n🧤 Gabin : ' + match.arrets + ' arrêt' + (match.arrets > 1 ? 's' : '') : ''}\n\n#HBCLegé #Handball`;
-  const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
-  window.open(url, '_blank');
-}
 
-function joinWhatsapp() {
-  if (match?.whatsapp_link) window.open(match.whatsapp_link, '_blank');
-  else showToast('Lien WhatsApp non configuré');
-}
+
+
+
 
 // ─── UI ──────────────────────────────────────────────────────
 function updateUI() {
@@ -826,9 +886,7 @@ function updateUI() {
     arretsCard.style.display = 'block';
     arretsCount.textContent = match.arrets || 0;
   }
-  // WhatsApp button
-  const waBtn = document.getElementById('wa-join-btn');
-  if (waBtn) waBtn.style.display = match?.whatsapp_link ? 'block' : 'none';
+
 }
 
 // ─── GOAL FLASH ──────────────────────────────────────────────
