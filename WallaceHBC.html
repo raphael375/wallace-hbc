@@ -416,6 +416,17 @@ body{
           <div class="players-grid" id="players-grid"></div>
         </div>
         <div class="card">
+          <div class="card-title">⚡ ACTIONS RAPIDES</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <button onclick="addGoalAway()" style="padding:16px 8px;background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.2);border-radius:12px;cursor:pointer;color:#fff;font-size:13px;font-weight:700;transition:all 0.15s;" onmouseenter="this.style.borderColor='#ff6b6b'" onmouseleave="this.style.borderColor='rgba(255,255,255,0.2)'">
+              ⚽ But adverse
+            </button>
+            <button onclick="addArret()" style="padding:16px 8px;background:rgba(22,101,52,0.3);border:1.5px solid rgba(22,101,52,0.5);border-radius:12px;cursor:pointer;color:#86efac;font-size:13px;font-weight:700;transition:all 0.15s;" onmouseenter="this.style.borderColor='#86efac'" onmouseleave="this.style.borderColor='rgba(22,101,52,0.5)'">
+              🧤 Arrêt Gabin
+            </button>
+          </div>
+        </div>
+        <div class="card">
           <button class="btn-danger" onclick="cancelLastGoal()">↩ Annuler le dernier but</button>
           <button class="btn-primary" onclick="endMatch()" style="margin-top:8px;background:#166534;">✓ Terminer le match</button>
         </div>
@@ -454,6 +465,13 @@ body{
         <div class="card">
           <div class="card-title">📊 STATISTIQUES</div>
           <div class="stats-grid" id="stats-grid"></div>
+        </div>
+        <div class="card" id="arrets-card" style="display:none;">
+          <div class="card-title">🧤 GARDIEN</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:15px;color:rgba(255,255,255,0.8);">#12 Gabin — Arrêts</span>
+            <span style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:#86efac;" id="arrets-count">0</span>
+          </div>
         </div>
         <div class="card">
           <div class="card-title">🔔 ALERTES BUT</div>
@@ -588,7 +606,7 @@ async function startMatch() {
     adversaire: adv, date, lieu,
     whatsapp_link: wa,
     score_home: 0, score_away: 0,
-    goals: [], half: 1, status: 'live',
+    goals: [], arrets: 0, half: 1, status: 'live',
     created_at: new Date().toISOString()
   };
   await saveMatch(data);
@@ -619,6 +637,42 @@ async function addGoal(joueur) {
   // Send WhatsApp alert
   sendWhatsappAlert(goal, scoreHome, match.score_away || 0);
   showToast(`BUT de ${joueur.nom} ! 🎯`);
+}
+
+async function addGoalAway() {
+  if (!match || match.status !== 'live') { showToast('Aucun match en cours'); return; }
+  const scoreAway = (match.score_away || 0) + 1;
+  const goal = {
+    joueur_num: '—',
+    joueur_nom: match.adversaire || 'Adverse',
+    team: 'away',
+    half: currentHalf,
+    score_home: match.score_home || 0,
+    score_away: scoreAway,
+    time: new Date().toISOString()
+  };
+  goals.push(goal);
+  match.score_away = scoreAway;
+  match.goals = goals;
+  await saveMatch({ score_away: scoreAway, goals });
+  updateUI();
+  showToast(`But adverse — ${match.adversaire} ${scoreAway} 😤`);
+}
+
+async function addArret() {
+  if (!match || match.status !== 'live') { showToast('Aucun match en cours'); return; }
+  const arrets = (match.arrets || 0) + 1;
+  match.arrets = arrets;
+  await saveMatch({ arrets });
+  updateUI();
+  // Flash vert pour les arrêts
+  const flash = document.getElementById('goal-flash');
+  document.getElementById('gf-player').textContent = '🧤 ARRÊT DE GABIN !';
+  document.getElementById('gf-score').textContent = arrets + ' arrêt' + (arrets > 1 ? 's' : '');
+  flash.style.background = '#166534';
+  flash.classList.add('show');
+  setTimeout(() => { flash.classList.remove('show'); flash.style.background = 'var(--red)'; }, 2000);
+  showToast(`Arrêt de Gabin ! 🧤 (${arrets})`);
 }
 
 async function cancelLastGoal() {
@@ -664,7 +718,7 @@ function sendFinalSummary() {
   goals.forEach(g => { stats[g.joueur_nom] = (stats[g.joueur_nom] || 0) + 1; });
   const buteurs = Object.entries(stats).sort((a,b) => b[1]-a[1])
     .map(([n,c]) => `  • ${n} : ${c} but${c>1?'s':''}`).join('\n');
-  const msg = `🏆 RÉSUMÉ DU MATCH\nHBC Legé ${match.score_home} – ${match.score_away} ${match.adversaire}\n\n⚽ Buteurs :\n${buteurs || '  Aucun but'}\n\n#HBCLegé #Handball`;
+  const msg = `🏆 RÉSUMÉ DU MATCH\nHBC Legé ${match.score_home} – ${match.score_away} ${match.adversaire}\n\n⚽ Buteurs HBC :\n${buteurs || '  Aucun but'}${match.arrets ? '\n\n🧤 Gabin : ' + match.arrets + ' arrêt' + (match.arrets > 1 ? 's' : '') : ''}\n\n#HBCLegé #Handball`;
   const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
   window.open(url, '_blank');
 }
@@ -716,14 +770,21 @@ function updateUI() {
     if (!goals.length) { tl.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;font-size:14px;">Aucun but pour le moment</div>'; }
     else {
       tl.innerHTML = [...goals].reverse().map(g => `
-        <div class="tl-item">
-          <div class="tl-score">${g.score_home}–${g.score_away}</div>
+        <div class="tl-item" style="border-left-color:${g.team === 'away' ? '#ff6b6b' : 'var(--red)'}">
+          <div class="tl-score" style="color:${g.team === 'away' ? '#ff6b6b' : 'var(--red-light)'}">${g.score_home}–${g.score_away}</div>
           <div>
-            <div class="tl-player">#${g.joueur_num} ${g.joueur_nom}</div>
+            <div class="tl-player">${g.team === 'away' ? '⚽ ' : '#' + g.joueur_num + ' '}${g.joueur_nom}</div>
             <div class="tl-num">${g.half === 1 ? '1ère mi-temps' : '2ème mi-temps'}</div>
           </div>
         </div>`).join('');
     }
+  }
+  // Arrets
+  const arretsCard = document.getElementById('arrets-card');
+  const arretsCount = document.getElementById('arrets-count');
+  if (arretsCard && match) {
+    arretsCard.style.display = 'block';
+    arretsCount.textContent = match.arrets || 0;
   }
   // WhatsApp button
   const waBtn = document.getElementById('wa-join-btn');
