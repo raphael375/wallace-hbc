@@ -455,6 +455,7 @@ body{
             <input id="setup-whatsapp" type="url" placeholder="https://chat.whatsapp.com/..."/>
           </div>
           <button class="btn-primary" onclick="startMatch()" style="margin-top:4px;">🏁 Lancer le match</button>
+          <button class="btn-danger" onclick="resetMatch()" style="margin-top:8px;">🗑 Effacer le match précédent</button>
         </div>
       </div>
     </div>
@@ -596,12 +597,40 @@ async function saveMatch(data) {
 }
 
 // ─── SETUP MATCH ─────────────────────────────────────────────
+async function resetMatch() {
+  if (!confirm('Effacer le match précédent et repartir à zéro ?')) return;
+  // Delete all matches from DB
+  if (match && match.id) {
+    await sbFetch('DELETE', `/rest/v1/hbc_match?id=eq.${match.id}`, null);
+  }
+  match = null;
+  goals = [];
+  currentHalf = 1;
+  // Reset score display
+  document.getElementById('score-display').textContent = '0 – 0';
+  document.getElementById('team-away-name').textContent = 'ADV';
+  document.getElementById('badge-half').textContent = '1ère MT';
+  document.getElementById('match-date-display').textContent = '';
+  document.getElementById('live-badge').style.display = 'none';
+  // Clear setup fields
+  document.getElementById('setup-adversaire').value = '';
+  document.getElementById('setup-lieu').value = '';
+  document.getElementById('setup-whatsapp').value = '';
+  document.getElementById('setup-date').value = new Date().toISOString().split('T')[0];
+  showToast('Match effacé ✓ Prêt pour un nouveau match !');
+  switchPage('setup');
+}
+
 async function startMatch() {
   const adv = document.getElementById('setup-adversaire').value.trim();
   const date = document.getElementById('setup-date').value;
   const lieu = document.getElementById('setup-lieu').value.trim();
   const wa = document.getElementById('setup-whatsapp').value.trim();
   if (!adv) { showToast('Merci de saisir l\'adversaire'); return; }
+  // Always create a brand new match
+  match = null;
+  goals = [];
+  currentHalf = 1;
   const data = {
     adversaire: adv, date, lieu,
     whatsapp_link: wa,
@@ -610,7 +639,6 @@ async function startMatch() {
     created_at: new Date().toISOString()
   };
   await saveMatch(data);
-  goals = []; currentHalf = 1;
   updateUI();
   showToast('Match lancé ! 🏁');
   switchPage('live');
