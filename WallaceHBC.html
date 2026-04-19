@@ -586,33 +586,43 @@ function sendNotif(title, body) {
 async function pollMatch() {
   const rows = await sbFetch('GET', '/rest/v1/hbc_match?order=created_at.desc&limit=1', null);
   if (rows && rows.length > 0) {
+    // Sauvegarder les anciennes valeurs AVANT mise à jour
     const newGoalsCount = (rows[0].goals || []).length;
     const oldGoalsCount = goals.length;
-    const oldStatus = match?.status;
-    const oldHalf = match?.half;
+    const oldStatus = match ? String(match.status) : null;
+    const oldHalf = match ? Number(match.half) : null;
+
+    // Mettre à jour le state
     match = rows[0];
     goals = match.goals || [];
     currentHalf = match.half || 1;
-    if (newGoalsCount > oldGoalsCount && userRole === 'spectateur') {
+
+    // Notif nouveau but
+    if (newGoalsCount > oldGoalsCount) {
       const lastGoal = goals[goals.length - 1];
       triggerGoalFlash(lastGoal);
-      const isAway = lastGoal.team === 'away';
-      if (isAway) {
-        sendNotif('⚽ But adverse !', `HBC Legé ${lastGoal.score_home} – ${lastGoal.score_away} ${match.adversaire}`);
-      } else {
-        sendNotif(`🤾 BUT de ${lastGoal.joueur_nom} !`, `HBC Legé ${lastGoal.score_home} – ${lastGoal.score_away} ${match.adversaire}`);
+      if (userRole === 'spectateur') {
+        const isAway = lastGoal.team === 'away';
+        if (isAway) {
+          sendNotif('⚽ But adverse !', `HBC Legé ${lastGoal.score_home} – ${lastGoal.score_away} ${match.adversaire}`);
+        } else {
+          sendNotif(`🤾 BUT de ${lastGoal.joueur_nom} !`, `HBC Legé ${lastGoal.score_home} – ${lastGoal.score_away} ${match.adversaire}`);
+        }
       }
     }
-    // Notif mi-temps
-    if (oldHalf === 1 && match.half === 2) {
-      sendNotif('🔔 Mi-temps !', `HBC Legé ${match.score_home} – ${match.score_away} ${match.adversaire} à la pause`);
+
+    // Notif mi-temps (half 1→2)
+    if (oldHalf === 1 && Number(match.half) === 2) {
+      sendNotif('🔔 MI-TEMPS !', `Score à la pause : HBC Legé ${match.score_home} – ${match.score_away} ${match.adversaire}`);
       showToast('MI-TEMPS ! 🔔');
     }
+
     // Notif fin de match
     if (oldStatus === 'live' && match.status === 'finished') {
-      sendNotif('🏆 Match terminé !', `HBC Legé ${match.score_home} – ${match.score_away} ${match.adversaire} — Résultat final`);
+      sendNotif('🏆 MATCH TERMINÉ !', `Score final : HBC Legé ${match.score_home} – ${match.score_away} ${match.adversaire}`);
       showToast('MATCH TERMINÉ ! 🏆');
     }
+
     updateUI();
     document.getElementById('live-badge').style.display = match.status === 'live' ? 'flex' : 'none';
   }
