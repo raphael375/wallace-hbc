@@ -634,7 +634,6 @@ async function addGoal(joueur) {
   await saveMatch({ score_home: scoreHome, goals, half: currentHalf });
   triggerGoalFlash(goal);
   updateUI();
-  // Send WhatsApp alert
   sendWhatsappAlert(goal, scoreHome, match.score_away || 0);
   showToast(`BUT de ${joueur.nom} ! 🎯`);
 }
@@ -656,6 +655,7 @@ async function addGoalAway() {
   match.goals = goals;
   await saveMatch({ score_away: scoreAway, goals });
   updateUI();
+  sendWhatsappAlert(goal, match.score_home || 0, scoreAway);
   showToast(`But adverse — ${match.adversaire} ${scoreAway} 😤`);
 }
 
@@ -669,9 +669,19 @@ async function addArret() {
   const flash = document.getElementById('goal-flash');
   document.getElementById('gf-player').textContent = '🧤 ARRÊT DE GABIN !';
   document.getElementById('gf-score').textContent = arrets + ' arrêt' + (arrets > 1 ? 's' : '');
+  document.querySelector('.goal-flash-text').textContent = 'ARRÊT !';
   flash.style.background = '#166534';
   flash.classList.add('show');
-  setTimeout(() => { flash.classList.remove('show'); flash.style.background = 'var(--red)'; }, 2000);
+  setTimeout(() => { 
+    flash.classList.remove('show'); 
+    flash.style.background = 'var(--red)';
+    document.querySelector('.goal-flash-text').textContent = 'BUT !';
+  }, 2000);
+  // WhatsApp alert for arret
+  if (match?.whatsapp_link) {
+    const msg = `🧤 ARRÊT DE GABIN (#12) !\n📊 HBC Legé ${match.score_home || 0} – ${match.score_away || 0} ${match.adversaire}\n🔢 Total arrêts : ${arrets}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  }
   showToast(`Arrêt de Gabin ! 🧤 (${arrets})`);
 }
 
@@ -707,9 +717,11 @@ function setHalf(h) {
 // ─── WHATSAPP ────────────────────────────────────────────────
 function sendWhatsappAlert(goal, scoreHome, scoreAway) {
   if (!match?.whatsapp_link) return;
-  const msg = `🤾 BUT DE ${goal.joueur_nom.toUpperCase()} (#${goal.joueur_num}) !\n⚡ HBC Legé ${scoreHome} – ${scoreAway} ${match.adversaire}\n📍 ${goal.half === 1 ? '1ère mi-temps' : '2ème mi-temps'}`;
-  const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
-  window.open(url, '_blank');
+  const isAway = goal.team === 'away';
+  const msg = isAway
+    ? `😤 BUT DE ${goal.joueur_nom.toUpperCase()} !\n📊 HBC Legé ${scoreHome} – ${scoreAway} ${match.adversaire}\n📍 ${goal.half === 1 ? '1ère mi-temps' : '2ème mi-temps'}`
+    : `🤾 BUT DE ${goal.joueur_nom.toUpperCase()} (#${goal.joueur_num}) !\n📊 HBC Legé ${scoreHome} – ${scoreAway} ${match.adversaire}\n📍 ${goal.half === 1 ? '1ère mi-temps' : '2ème mi-temps'}`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 function sendFinalSummary() {
