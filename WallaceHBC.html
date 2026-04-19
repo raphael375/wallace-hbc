@@ -473,6 +473,10 @@ body{
             <span style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:#86efac;" id="arrets-count">0</span>
           </div>
         </div>
+        <div class="card" id="export-card" style="display:none;">
+          <div class="card-title">📄 RÉSUMÉ DU MATCH</div>
+          <button class="btn-primary" onclick="exportMatchPDF()">📄 Télécharger le récap PDF</button>
+        </div>
 
       </div>
     </div>
@@ -545,6 +549,10 @@ async function doLogin() {
     if (code !== REPORTER_CODE) { showToast('Code reporter incorrect ❌'); return; }
   }
   userEmail = email;
+  // Demander permission notifications
+  if ('Notification' in window && Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
   showScreen('screen-main');
   await loadMatch();
   initNav();
@@ -565,17 +573,45 @@ async function loadMatch() {
   pollInterval = setInterval(pollMatch, 5000);
 }
 
+function sendNotif(title, body) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(title, {
+      body,
+      icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="%23c8102e"/><text y=".9em" font-size="80" x="10">🤾</text></svg>',
+      badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="%23c8102e"/></svg>'
+    });
+  }
+}
+
 async function pollMatch() {
   const rows = await sbFetch('GET', '/rest/v1/hbc_match?order=created_at.desc&limit=1', null);
   if (rows && rows.length > 0) {
     const newGoalsCount = (rows[0].goals || []).length;
     const oldGoalsCount = goals.length;
+    const oldStatus = match?.status;
+    const oldHalf = match?.half;
     match = rows[0];
     goals = match.goals || [];
     currentHalf = match.half || 1;
     if (newGoalsCount > oldGoalsCount && userRole === 'spectateur') {
       const lastGoal = goals[goals.length - 1];
       triggerGoalFlash(lastGoal);
+      const isAway = lastGoal.team === 'away';
+      if (isAway) {
+        sendNotif('⚽ But adverse !', `HBC Legé ${lastGoal.score_home} – ${lastGoal.score_away} ${match.adversaire}`);
+      } else {
+        sendNotif(`🤾 BUT de ${lastGoal.joueur_nom} !`, `HBC Legé ${lastGoal.score_home} – ${lastGoal.score_away} ${match.adversaire}`);
+      }
+    }
+    // Notif mi-temps
+    if (oldHalf === 1 && match.half === 2) {
+      sendNotif('🔔 Mi-temps !', `HBC Legé ${match.score_home} – ${match.score_away} ${match.adversaire} à la pause`);
+      showToast('MI-TEMPS ! 🔔');
+    }
+    // Notif fin de match
+    if (oldStatus === 'live' && match.status === 'finished') {
+      sendNotif('🏆 Match terminé !', `HBC Legé ${match.score_home} – ${match.score_away} ${match.adversaire} — Résultat final`);
+      showToast('MATCH TERMINÉ ! 🏆');
     }
     updateUI();
     document.getElementById('live-badge').style.display = match.status === 'live' ? 'flex' : 'none';
@@ -833,6 +869,21 @@ function updateUI() {
   const scoreHome = match?.score_home || 0;
   const scoreAway = match?.score_away || 0;
   document.getElementById('score-display').textContent = `${scoreHome} – ${scoreAway}`;
+  // Status banner
+  let statusBanner = document.getElementById('status-banner');
+  if (!statusBanner) {
+    statusBanner = document.createElement('div');
+    statusBanner.id = 'status-banner';
+    statusBanner.style.cssText = 'display:none;text-align:center;padding:8px;font-family:Bebas Neue,sans-serif;font-size:18px;letter-spacing:2px;';
+    document.querySelector('.scoreboard').appendChild(statusBanner);
+  }
+  if (match?.status === 'finished') {
+    statusBanner.style.display = 'block';
+    statusBanner.style.color = '#86efac';
+    statusBanner.textContent = '✓ MATCH TERMINÉ';
+  } else if (match?.status === 'live') {
+    statusBanner.style.display = 'none';
+  }
   document.getElementById('team-away-name').textContent = match?.adversaire || 'ADV';
   document.getElementById('badge-half').textContent = (match?.half || 1) === 1 ? '1ère MT' : '2ème MT';
   if (match?.date) document.getElementById('match-date-display').textContent = new Date(match.date).toLocaleDateString('fr-FR', {weekday:'short',day:'numeric',month:'long'});
@@ -885,6 +936,11 @@ function updateUI() {
   if (arretsCard && match) {
     arretsCard.style.display = 'block';
     arretsCount.textContent = match.arrets || 0;
+  }
+  // Export card — visible pour tous quand match terminé
+  const exportCard = document.getElementById('export-card');
+  if (exportCard && match) {
+    exportCard.style.display = match.status === 'finished' ? 'block' : 'none';
   }
 
 }
