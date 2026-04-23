@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8"/>
-<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="Wallace HBC"/>
 <meta name="theme-color" content="#c8102e"/>
@@ -549,7 +549,6 @@ async function doLogin() {
     if (code !== REPORTER_CODE) { showToast('Code reporter incorrect ❌'); return; }
   }
   userEmail = email;
-  // Demander permission notifications
   if ('Notification' in window && Notification.permission === 'default') {
     await Notification.requestPermission();
   }
@@ -568,7 +567,6 @@ async function loadMatch() {
     updateUI();
     document.getElementById('live-badge').style.display = match.status === 'live' ? 'flex' : 'none';
   }
-  // Start polling for spectators
   if (pollInterval) clearInterval(pollInterval);
   pollInterval = setInterval(pollMatch, 5000);
 }
@@ -586,18 +584,15 @@ function sendNotif(title, body) {
 async function pollMatch() {
   const rows = await sbFetch('GET', '/rest/v1/hbc_match?order=created_at.desc&limit=1', null);
   if (rows && rows.length > 0) {
-    // Sauvegarder les anciennes valeurs AVANT mise à jour
     const newGoalsCount = (rows[0].goals || []).length;
     const oldGoalsCount = goals.length;
     const oldStatus = match ? String(match.status) : null;
     const oldHalf = match ? Number(match.half) : null;
 
-    // Mettre à jour le state
     match = rows[0];
     goals = match.goals || [];
     currentHalf = match.half || 1;
 
-    // Notif nouveau but
     if (newGoalsCount > oldGoalsCount) {
       const lastGoal = goals[goals.length - 1];
       triggerGoalFlash(lastGoal);
@@ -611,13 +606,11 @@ async function pollMatch() {
       }
     }
 
-    // Notif mi-temps (half 1→2)
     if (oldHalf === 1 && Number(match.half) === 2) {
       sendNotif('🔔 MI-TEMPS !', `Score à la pause : HBC Legé ${match.score_home} – ${match.score_away} ${match.adversaire}`);
       showToast('MI-TEMPS ! 🔔');
     }
 
-    // Notif fin de match
     if (oldStatus === 'live' && match.status === 'finished') {
       sendNotif('🏆 MATCH TERMINÉ !', `Score final : HBC Legé ${match.score_home} – ${match.score_away} ${match.adversaire}`);
       showToast('MATCH TERMINÉ ! 🏆');
@@ -640,20 +633,17 @@ async function saveMatch(data) {
 // ─── SETUP MATCH ─────────────────────────────────────────────
 async function resetMatch() {
   if (!confirm('Effacer le match précédent et repartir à zéro ?')) return;
-  // Delete all matches from DB
   if (match && match.id) {
     await sbFetch('DELETE', `/rest/v1/hbc_match?id=eq.${match.id}`, null);
   }
   match = null;
   goals = [];
   currentHalf = 1;
-  // Reset score display
   document.getElementById('score-display').textContent = '0 – 0';
   document.getElementById('team-away-name').textContent = 'ADV';
   document.getElementById('badge-half').textContent = '1ère MT';
   document.getElementById('match-date-display').textContent = '';
   document.getElementById('live-badge').style.display = 'none';
-  // Clear setup fields
   document.getElementById('setup-adversaire').value = '';
   document.getElementById('setup-lieu').value = '';
   document.getElementById('setup-date').value = new Date().toISOString().split('T')[0];
@@ -665,15 +655,13 @@ async function startMatch() {
   const adv = document.getElementById('setup-adversaire').value.trim();
   const date = document.getElementById('setup-date').value;
   const lieu = document.getElementById('setup-lieu').value.trim();
-  const wa = document.getElementById('setup-whatsapp').value.trim();
+  // ✅ FIX : suppression de la ligne setup-whatsapp qui causait le crash
   if (!adv) { showToast('Merci de saisir l\'adversaire'); return; }
-  // Always create a brand new match
   match = null;
   goals = [];
   currentHalf = 1;
   const data = {
     adversaire: adv, date, lieu,
-    whatsapp_link: wa,
     score_home: 0, score_away: 0,
     goals: [], arrets: 0, half: 1, status: 'live',
     created_at: new Date().toISOString()
@@ -731,7 +719,6 @@ async function addArret() {
   match.arrets = arrets;
   await saveMatch({ arrets });
   updateUI();
-  // Flash vert pour les arrêts
   const flash = document.getElementById('goal-flash');
   document.getElementById('gf-player').textContent = '🧤 ARRÊT DE GABIN !';
   document.getElementById('gf-score').textContent = arrets + ' arrêt' + (arrets > 1 ? 's' : '');
@@ -763,7 +750,6 @@ function exportMatchPDF() {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
 
-  // Header rouge
   doc.setFillColor(200, 16, 46);
   doc.rect(0, 0, pageW, 35, 'F');
   doc.setTextColor(255, 255, 255);
@@ -773,7 +759,6 @@ function exportMatchPDF() {
   doc.text('Résumé du match', pageW/2, 22, { align: 'center' });
   if (match.date) doc.text(new Date(match.date).toLocaleDateString('fr-FR', {weekday:'long',day:'numeric',month:'long',year:'numeric'}), pageW/2, 29, { align: 'center' });
 
-  // Score
   doc.setTextColor(30, 30, 30);
   doc.setFontSize(11); doc.setFont(undefined, 'normal');
   doc.text('HBC Legé', 30, 50);
@@ -782,17 +767,14 @@ function exportMatchPDF() {
   doc.setTextColor(200, 16, 46);
   doc.text(`${match.score_home} – ${match.score_away}`, pageW/2, 58, { align: 'center' });
 
-  // Lieu
   if (match.lieu) {
     doc.setFontSize(10); doc.setFont(undefined, 'normal'); doc.setTextColor(120,120,120);
     doc.text(`📍 ${match.lieu}`, pageW/2, 66, { align: 'center' });
   }
 
-  // Séparateur
   doc.setDrawColor(200,16,46); doc.setLineWidth(0.5);
   doc.line(20, 70, pageW-20, 70);
 
-  // Buteurs
   let y = 80;
   doc.setFontSize(13); doc.setFont(undefined, 'bold'); doc.setTextColor(200,16,46);
   doc.text('⚽ BUTEURS HBC LEGÉ', 20, y); y += 8;
@@ -822,13 +804,11 @@ function exportMatchPDF() {
   doc.setDrawColor(220,220,220); doc.setLineWidth(0.3);
   doc.line(20, y, pageW-20, y); y += 10;
 
-  // Gardien
   doc.setFontSize(13); doc.setFont(undefined, 'bold'); doc.setTextColor(22,101,52);
   doc.text('🧤 GARDIEN — #12 GABIN', 20, y); y += 8;
   doc.setFontSize(12); doc.setFont(undefined, 'normal'); doc.setTextColor(30,30,30);
   doc.text(`Arrêts : ${match.arrets || 0}`, 25, y); y += 12;
 
-  // Chronologie
   doc.setDrawColor(220,220,220); doc.line(20, y, pageW-20, y); y += 8;
   doc.setFontSize(13); doc.setFont(undefined, 'bold'); doc.setTextColor(200,16,46);
   doc.text('📋 CHRONOLOGIE', 20, y); y += 8;
@@ -842,7 +822,6 @@ function exportMatchPDF() {
     doc.text(label, 20, y); y += 6;
   });
 
-  // Footer
   doc.setFontSize(9); doc.setTextColor(150,150,150);
   doc.text('#HBCLegé #Handball', pageW/2, 285, { align: 'center' });
 
@@ -867,19 +846,11 @@ function setHalf(h) {
   updateUI();
 }
 
-// ─── WHATSAPP ────────────────────────────────────────────────
-
-
-
-
-
-
 // ─── UI ──────────────────────────────────────────────────────
 function updateUI() {
   const scoreHome = match?.score_home || 0;
   const scoreAway = match?.score_away || 0;
   document.getElementById('score-display').textContent = `${scoreHome} – ${scoreAway}`;
-  // Status banner
   let statusBanner = document.getElementById('status-banner');
   if (!statusBanner) {
     statusBanner = document.createElement('div');
@@ -897,7 +868,6 @@ function updateUI() {
   document.getElementById('team-away-name').textContent = match?.adversaire || 'ADV';
   document.getElementById('badge-half').textContent = (match?.half || 1) === 1 ? '1ère MT' : '2ème MT';
   if (match?.date) document.getElementById('match-date-display').textContent = new Date(match.date).toLocaleDateString('fr-FR', {weekday:'short',day:'numeric',month:'long'});
-  // Players grid
   const grid = document.getElementById('players-grid');
   if (grid) {
     const goalsByPlayer = {};
@@ -909,7 +879,6 @@ function updateUI() {
         <div class="player-name">${j.nom}</div>
       </button>`).join('');
   }
-  // Stats
   const statsGrid = document.getElementById('stats-grid');
   if (statsGrid) {
     const goalsByPlayer = {};
@@ -925,7 +894,6 @@ function updateUI() {
         <div class="stat-count">${j.goals || '—'}</div>
       </div>`).join('');
   }
-  // Timeline
   const tl = document.getElementById('timeline');
   if (tl) {
     if (!goals.length) { tl.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;font-size:14px;">Aucun but pour le moment</div>'; }
@@ -940,19 +908,16 @@ function updateUI() {
         </div>`).join('');
     }
   }
-  // Arrets
   const arretsCard = document.getElementById('arrets-card');
   const arretsCount = document.getElementById('arrets-count');
   if (arretsCard && match) {
     arretsCard.style.display = 'block';
     arretsCount.textContent = match.arrets || 0;
   }
-  // Export card — visible pour tous quand match terminé
   const exportCard = document.getElementById('export-card');
   if (exportCard && match) {
     exportCard.style.display = match.status === 'finished' ? 'block' : 'none';
   }
-
 }
 
 // ─── GOAL FLASH ──────────────────────────────────────────────
