@@ -213,7 +213,7 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--white);mi
       </div>
       <div class="field">
         <label>Votre email</label>
-        <input id="login-email" type="email" placeholder="prenom@email.fr"/>
+        <input id="login-email" type="text" placeholder="prenom@email.fr (optionnel pour spectateur)"/>
       </div>
       <div id="reporter-fields" style="display:none;">
         <div class="field">
@@ -727,6 +727,8 @@ async function doLogin() {
   }
   await loadMatches();
   initNav();
+  updateChronoDisplay(activeTeamView);
+  updateSanctionsDisplay(activeTeamView);
   await registerPresence();
   await fetchViewersCount();
   setInterval(fetchViewersCount, 20000);
@@ -1086,12 +1088,16 @@ function updateUI() {
       else if (yellowCount) cls += ' has-yellow';
       else if (gs) cls += ' has-goals';
       const icons = ss.map(s=>s.type==='yellow'?'<span class="sanction-icon">🟡</span>':'<span class="sanction-icon" style="'+(s.expired?'opacity:0.3':'')+'">⏱</span>').join('');
-      return `<button class="${cls}" onclick="addGoal(${JSON.stringify(j).replace(/"/g,'&quot;')})">
-        ${gs?`<div class="player-goals">${gs}</div>`:''}
-        <div class="player-sanctions">${icons}</div>
-        ${PHOTOS[j.num] ? `<img src="${PHOTOS[j.num]}" style="width:54px;height:54px;border-radius:50%;object-fit:cover;margin-bottom:3px;border:2px solid rgba(255,255,255,0.2);">` : `<div class="player-num">${j.num}</div>`}
-        <div class="player-name">${PHOTOS[j.num] ? '#'+j.num+' '+j.nom : j.nom}</div>
-      </button>`;
+      const photoHtml = PHOTOS[j.num]
+        ? '<img src="' + PHOTOS[j.num] + '" style="width:54px;height:54px;border-radius:50%;object-fit:cover;margin-bottom:3px;border:2px solid rgba(255,255,255,0.2);">'
+        : '<div class="player-num">' + j.num + '</div>';
+      const nameHtml = '<div class="player-name">' + (PHOTOS[j.num] ? '#'+j.num+' ' : '') + j.nom + '</div>';
+      return '<button class="' + cls + '" onclick="addGoal(' + JSON.stringify(j).replace(/"/g,'&quot;') + ')">'
+        + (gs ? '<div class="player-goals">'+gs+'</div>' : '')
+        + '<div class="player-sanctions">' + icons + '</div>'
+        + photoHtml
+        + nameHtml
+        + '</button>';
     }).join('');
   }
 
