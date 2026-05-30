@@ -1113,12 +1113,19 @@ function updateUI() {
       statsGrid.innerHTML = sortedP.map(j=>{
         const yc = j.sanctions.filter(s=>s.type==='yellow').length;
         const tm = j.sanctions.filter(s=>s.type==='2min').length;
-        const sanctionStr = [yc?`🟡 x${yc}`:'', tm?`⏱ x${tm}`:''].filter(Boolean).join(' ');
-        return `<div class="stat-row">
-          <div><div class="stat-player">#${j.num} ${j.nom}</div>${sanctionStr?`<div class="stat-sanctions">${sanctionStr}</div>`:''}</div>
-          <div class="stat-goals-bar"><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${j.goals?(j.goals/maxG*100):0}%"></div></div></div>
-          <div class="stat-count">${j.goals||'—'}</div>
-        </div>`;
+        const sanctionStr = [yc?'🟡 x'+yc:'', tm?'⏱ x'+tm:''].filter(Boolean).join(' ');
+        const photoEl = PHOTOS[j.num]
+          ? '<img src="' + PHOTOS[j.num] + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(200,16,46,0.5);">'
+          : '<div style="width:36px;height:36px;border-radius:50%;background:rgba(200,16,46,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:Bebas Neue,sans-serif;font-size:14px;color:rgba(255,255,255,0.6);">' + j.num + '</div>';
+        return '<div class="stat-row">'
+          + '<div style="display:flex;align-items:center;gap:8px;">'
+          + photoEl
+          + '<div><div class="stat-player">' + (PHOTOS[j.num] ? '' : '#'+j.num+' ') + j.nom + '</div>'
+          + (sanctionStr ? '<div class="stat-sanctions">'+sanctionStr+'</div>' : '')
+          + '</div></div>'
+          + '<div class="stat-goals-bar"><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:' + (j.goals?(j.goals/maxG*100):0) + '%"></div></div></div>'
+          + '<div class="stat-count">' + (j.goals||'—') + '</div>'
+          + '</div>';
       }).join('');
     }
   }
