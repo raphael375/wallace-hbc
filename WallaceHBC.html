@@ -709,8 +709,8 @@ function setRole(role) {
 
 async function doLogin() {
   const email = document.getElementById('login-email').value.trim();
-  if (!email) { showToast('Merci de saisir votre email'); return; }
   if (userRole === 'reporter') {
+    if (!email) { showToast('Merci de saisir votre email'); return; }
     const code = document.getElementById('login-code').value.trim();
     if (code !== REPORTER_CODE) { showToast('Code reporter incorrect ❌'); return; }
     reporterTeam = document.getElementById('login-team').value;
@@ -1089,8 +1089,8 @@ function updateUI() {
       return `<button class="${cls}" onclick="addGoal(${JSON.stringify(j).replace(/"/g,'&quot;')})">
         ${gs?`<div class="player-goals">${gs}</div>`:''}
         <div class="player-sanctions">${icons}</div>
-        \${PHOTOS[j.num] ? `<img src="\${PHOTOS[j.num]}" style="width:54px;height:54px;border-radius:50%;object-fit:cover;margin-bottom:3px;border:2px solid rgba(255,255,255,0.2);">` : `<div class="player-num">\${j.num}</div>`}
-        <div class="player-name">\${PHOTOS[j.num] ? '#'+j.num+' '+j.nom : j.nom}</div>
+        ${PHOTOS[j.num] ? `<img src="${PHOTOS[j.num]}" style="width:54px;height:54px;border-radius:50%;object-fit:cover;margin-bottom:3px;border:2px solid rgba(255,255,255,0.2);">` : `<div class="player-num">${j.num}</div>`}
+        <div class="player-name">${PHOTOS[j.num] ? '#'+j.num+' '+j.nom : j.nom}</div>
       </button>`;
     }).join('');
   }
