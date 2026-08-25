@@ -280,13 +280,39 @@ const SB_URL = 'https://whxulncwtozpcyzigdgg.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoeHVsbmN3dG96cGN5emlnZGdnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0ODc1NjUsImV4cCI6MjA5MjA2MzU2NX0.A-_-NtC1DcYf13zeSky2d4deNPX_eyJS_vKPzygoakk';
 const REPORTER_CODE = 'hbclege2024';
 
+// ─── DEBUG : rendre visibles les erreurs JS (au lieu qu'elles se perdent silencieusement) ───
+window.addEventListener('error', (e) => {
+  console.error('Erreur JS:', e.message, e.filename, e.lineno);
+  const el = document.getElementById('toast');
+  if (el) { el.textContent = '⚠ Erreur JS : ' + e.message + ' (ligne ' + e.lineno + ')'; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'), 6000); }
+});
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('Promesse rejetée:', e.reason);
+  const el = document.getElementById('toast');
+  if (el) { el.textContent = '⚠ Erreur async : ' + (e.reason && e.reason.message || e.reason); el.classList.add('show'); setTimeout(()=>el.classList.remove('show'), 6000); }
+});
+
 async function sbFetch(method, path, body) {
-  const res = await fetch(SB_URL + path, {
-    method,
-    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', 'Prefer': method === 'POST' ? 'return=representation' : '' },
-    body: body ? JSON.stringify(body) : undefined
-  });
-  try { return await res.json(); } catch { return null; }
+  try {
+    const res = await fetch(SB_URL + path, {
+      method,
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', 'Prefer': method === 'POST' ? 'return=representation' : '' },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    let json = null;
+    try { json = await res.json(); } catch { json = null; }
+    if (!res.ok) {
+      console.error('sbFetch HTTP', res.status, method, path, json);
+      const msg = (json && (json.message || json.hint || json.error)) || ('HTTP ' + res.status);
+      showToast('⚠ Supabase : ' + msg);
+      return null;
+    }
+    return json;
+  } catch (err) {
+    console.error('sbFetch réseau échoué:', method, path, err);
+    showToast('⚠ Connexion Supabase impossible');
+    return null;
+  }
 }
 
 const PHOTOS = {
@@ -525,18 +551,24 @@ async function doLogin() {
     const code = document.getElementById('login-code').value.trim();
     if (code !== REPORTER_CODE) { showToast('Code reporter incorrect ❌'); return; }
   }
-  if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission();
+  try {
+    if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission();
+  } catch (err) { console.error('Notification KO:', err); }
   showScreen('screen-main');
-  await loadMatch();
+  try {
+    await loadMatch();
+  } catch (err) { console.error('loadMatch KO:', err); showToast('Connexion au serveur impossible, mode hors-ligne'); }
   initNav();
   if (userRole === 'reporter') {
     document.getElementById('chrono-controls').style.display = 'flex';
   }
   updateChronoDisplay();
   updateSanctionsDisplay();
-  await registerPresence();
-  await fetchViewersCount();
-  setInterval(fetchViewersCount, 20000);
+  try {
+    await registerPresence();
+    await fetchViewersCount();
+    setInterval(fetchViewersCount, 20000);
+  } catch (err) { console.error('presence/viewers KO:', err); }
 }
 
 // ─── MATCH ───────────────────────────────────────────────────
@@ -622,6 +654,7 @@ async function startMatch() {
   chronoState.remaining=HALF_DURATION; chronoState.running=false;
   const data = { team:'U16A', adversaire:adv, date, lieu, score_home:0, score_away:0, goals:[], arrets:0, arrets_detail:{}, half:1, status:'live', sanctions:[], chrono_remaining:HALF_DURATION, chrono_running:false, chrono_saved_at:new Date().toISOString(), created_at:new Date().toISOString() };
   await saveMatch(data);
+  if (!match || !match.id) { showToast('❌ Le match n\'a pas pu être enregistré (voir erreur ci-dessus)'); return; }
   document.getElementById('live-badge').style.display = 'flex';
   updateChronoDisplay(); updateUI();
   showToast('Match lancé ! 🏁'); switchPage('live');
