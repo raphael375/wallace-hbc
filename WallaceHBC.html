@@ -827,7 +827,7 @@ function initNav() {
   const pages = userRole==='reporter'
     ? [{id:'setup',icon:'⚙',label:'SETUP'},{id:'live',icon:'🎙',label:'LIVE'},{id:'score',icon:'📊',label:'STATS'},{id:'history',icon:'📋',label:'BUTS'}]
     : [{id:'score',icon:'📊',label:'STATS'},{id:'history',icon:'📋',label:'BUTS'}];
-  document.getElementById('bottom-nav').innerHTML = pages.map(p=>'<button class="nav-item" id="nav-'+p.id+'" onclick="switchPage(''+p.id+'')"><span class="nav-icon">'+p.icon+'</span>'+p.label+'</button>').join('');
+  document.getElementById('bottom-nav').innerHTML = pages.map(p=>`<button class="nav-item" id="nav-${p.id}" onclick="switchPage('${p.id}')"><span class="nav-icon">${p.icon}</span>${p.label}</button>`).join('');
   switchPage(userRole==='reporter' ? (match?'live':'setup') : 'score');
 }
 function switchPage(id) {
