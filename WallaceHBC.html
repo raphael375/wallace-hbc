@@ -125,6 +125,7 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--white);mi
 
 <div class="toast" id="toast"></div>
 <div class="goal-flash" id="goal-flash">
+  <img id="gf-photo" style="display:none;width:140px;height:140px;border-radius:50%;object-fit:cover;border:4px solid rgba(255,255,255,0.85);box-shadow:0 4px 24px rgba(0,0,0,0.4);animation:scale-in 0.3s ease-out;"/>
   <div class="goal-flash-text" id="gf-title">BUT !</div>
   <div class="goal-flash-sub" id="gf-player"></div>
   <div style="font-size:48px;font-family:Bebas Neue,sans-serif;letter-spacing:2px;" id="gf-score"></div>
@@ -677,7 +678,7 @@ async function addGoalAway() {
   const goal = { joueur_num:'—', joueur_nom:match.adversaire||'Adverse', team:'away', half, score_home:match.score_home||0, score_away:scoreAway, time:new Date().toISOString() };
   goals.push(goal); match.score_away=scoreAway; match.goals=goals;
   await saveMatch({ score_away:scoreAway, goals });
-  updateUI(); showToast('But adverse 😤');
+  triggerGoalFlash(goal); updateUI(); showToast('But adverse 😤');
 }
 
 async function addArret(gardien) {
@@ -840,16 +841,23 @@ function updateUI() {
 }
 
 // ─── FLASH / NOTIF ───────────────────────────────────────────
-function triggerFlash(title, sub, score, bg) {
+function triggerFlash(title, sub, score, bg, photoUrl) {
   document.getElementById('gf-title').textContent = title;
   document.getElementById('gf-player').textContent = sub;
   document.getElementById('gf-score').textContent = score;
   document.getElementById('goal-flash').style.background = bg || 'var(--red)';
+  const photoEl = document.getElementById('gf-photo');
+  if (photoUrl) { photoEl.src = photoUrl; photoEl.style.display = 'block'; }
+  else { photoEl.style.display = 'none'; photoEl.removeAttribute('src'); }
   document.getElementById('goal-flash').classList.add('show');
-  setTimeout(() => { document.getElementById('goal-flash').classList.remove('show'); document.getElementById('goal-flash').style.background='var(--red)'; }, 2200);
+  setTimeout(() => { document.getElementById('goal-flash').classList.remove('show'); document.getElementById('goal-flash').style.background='var(--red)'; photoEl.style.display='none'; }, 2200);
 }
 function triggerGoalFlash(goal) {
-  triggerFlash('BUT !', '#'+goal.joueur_num+' '+goal.joueur_nom, goal.score_home+' – '+goal.score_away, 'var(--red)');
+  if (goal.team === 'away') {
+    triggerFlash('BUT ADVERSE', goal.joueur_nom || 'Adversaire', goal.score_home+' – '+goal.score_away, '#0d0d0d');
+  } else {
+    triggerFlash('BUT !', '#'+goal.joueur_num+' '+goal.joueur_nom, goal.score_home+' – '+goal.score_away, 'var(--red)', PHOTOS[goal.joueur_num]);
+  }
 }
 function sendNotif(title, body) {
   if ('Notification' in window && Notification.permission === 'granted') new Notification(title, {body});
