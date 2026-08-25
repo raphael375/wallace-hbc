@@ -874,10 +874,22 @@ function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
 }
+let toastQueue = [];
+let toastShowing = false;
 function showToast(msg) {
-  const el=document.getElementById('toast');
-  el.textContent=msg; el.classList.add('show');
-  setTimeout(()=>el.classList.remove('show'),2800);
+  toastQueue.push(msg);
+  if (!toastShowing) processToastQueue();
+}
+function processToastQueue() {
+  if (!toastQueue.length) { toastShowing = false; return; }
+  toastShowing = true;
+  const msg = toastQueue.shift();
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(processToastQueue, 250);
+  }, 2800);
 }
 
 // ─── PDF ─────────────────────────────────────────────────────
