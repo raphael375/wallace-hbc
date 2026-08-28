@@ -269,12 +269,38 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--white);mi
       </div>
     </div>
 
-    <!-- PAGE HISTORIQUE -->
+    <!-- PAGE HISTORIQUE (match en cours) -->
     <div id="page-history" class="page" style="display:none;">
       <div class="content">
         <div class="card">
           <div class="card-title">📋 CHRONOLOGIE DES BUTS</div>
           <div class="timeline" id="timeline"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE ARCHIVES / SAISON -->
+    <div id="page-archive" class="page" style="display:none;">
+      <div class="content">
+        <div class="card">
+          <div class="card-title">🏆 STATS DE LA SAISON</div>
+          <div id="season-summary" style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:10px;line-height:1.5;"></div>
+          <div class="stats-grid" id="season-scorers"></div>
+        </div>
+        <div class="card" id="season-gk-card" style="display:none;">
+          <div class="card-title">🧤 GARDIENS — SAISON</div>
+          <div id="season-goalkeepers"></div>
+        </div>
+        <div class="card" id="archive-list-card">
+          <div class="card-title">📅 MATCHS JOUÉS</div>
+          <div class="timeline" id="archive-list"></div>
+        </div>
+        <div class="card" id="archive-detail-card" style="display:none;">
+          <button class="btn-secondary" onclick="closeArchiveDetail()" style="margin-top:0;margin-bottom:14px;">← Retour aux matchs</button>
+          <div id="archive-detail-header"></div>
+          <div class="card-title" style="margin-top:14px;">📋 CHRONOLOGIE</div>
+          <div class="timeline" id="archive-detail-timeline"></div>
+          <div id="archive-detail-gk"></div>
         </div>
       </div>
     </div>
@@ -644,7 +670,10 @@ async function saveMatch(data) {
 }
 
 async function resetMatch() {
-  if (!confirm('Effacer le match et repartir à zéro ?')) return;
+  const msg = (match && match.status === 'finished')
+    ? '⚠ Ce match est TERMINÉ et fait partie de l\'historique de la saison.\nL\'effacer le supprimera définitivement des statistiques. Continuer ?'
+    : 'Effacer le match et repartir à zéro ?';
+  if (!confirm(msg)) return;
   if (match&&match.id) await sbFetch('DELETE', '/rest/v1/hbc_match?id=eq.'+match.id, null);
   match=null; goals=[]; sanctions=[]; half=1;
   chronoState.remaining=HALF_DURATION; chronoState.running=false;
@@ -846,6 +875,125 @@ function updateUI() {
   }
 }
 
+// ─── ARCHIVES / STATS DE SAISON ─────────────────────────────
+let archiveMatches = [];
+async function loadArchivePage() {
+  const rows = await sbFetch('GET', '/rest/v1/hbc_match?team=eq.U16A&status=eq.finished&order=date.desc,created_at.desc', null);
+  archiveMatches = rows || [];
+  renderSeasonStats();
+  renderArchiveList();
+  document.getElementById('archive-list-card').style.display = 'block';
+  document.getElementById('archive-detail-card').style.display = 'none';
+}
+
+function renderSeasonStats() {
+  const summary = document.getElementById('season-summary');
+  const scorersEl = document.getElementById('season-scorers');
+  const gkCard = document.getElementById('season-gk-card');
+  const gkEl = document.getElementById('season-goalkeepers');
+  if (!archiveMatches.length) {
+    summary.textContent = 'Aucun match terminé pour le moment.';
+    scorersEl.innerHTML = '';
+    gkCard.style.display = 'none';
+    return;
+  }
+  let wins=0, draws=0, losses=0, goalsFor=0, goalsAgainst=0;
+  const goalMap = {};
+  const arretsMap = {};
+  archiveMatches.forEach(m => {
+    const sh = m.score_home||0, sa = m.score_away||0;
+    goalsFor += sh; goalsAgainst += sa;
+    if (sh>sa) wins++; else if (sh===sa) draws++; else losses++;
+    (m.goals||[]).forEach(g => { if (g.team!=='away') goalMap[g.joueur_num]=(goalMap[g.joueur_num]||0)+1; });
+    const det = m.arrets_detail||{};
+    Object.keys(det).forEach(num => { arretsMap[num]=(arretsMap[num]||0)+(det[num]||0); });
+  });
+  summary.innerHTML = archiveMatches.length+' match'+(archiveMatches.length>1?'s':'')+' joué'+(archiveMatches.length>1?'s':'')
+    +' — <span style="color:#86efac;">'+wins+'V</span> <span style="color:#fbbf24;">'+draws+'N</span> <span style="color:#f87171;">'+losses+'D</span>'
+    +' — '+goalsFor+' buts marqués, '+goalsAgainst+' concédés';
+  const maxG = Math.max(...Object.values(goalMap), 1);
+  const sortedScorers = JOUEURS.map(j => ({...j, goals: goalMap[j.num]||0})).filter(j => j.goals>0).sort((a,b)=>b.goals-a.goals);
+  scorersEl.innerHTML = sortedScorers.length ? sortedScorers.map(j => {
+    const pct = j.goals/maxG*100;
+    return '<div class="stat-row">'
+      +(PHOTOS[j.num]?'<img class="stat-photo" src="'+PHOTOS[j.num]+'">':'<div class="stat-num-circle">'+j.num+'</div>')
+      +'<div class="stat-info"><div class="stat-player">#'+j.num+' '+j.nom+'</div>'
+      +'<div class="stat-bar-bg"><div class="stat-bar-fill" style="width:'+pct+'%"></div></div></div>'
+      +'<div class="stat-count">'+j.goals+'</div></div>';
+  }).join('') : '<div style="text-align:center;color:rgba(255,255,255,0.3);padding:12px;font-size:13px;">Aucun but inscrit</div>';
+
+  const gkEntries = Object.keys(arretsMap).filter(num => arretsMap[num]>0);
+  if (gkEntries.length) {
+    gkCard.style.display = 'block';
+    gkEl.innerHTML = GARDIENS.map(g => {
+      const n = arretsMap[g.num]||0;
+      return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;">'
+        +(PHOTOS[g.num]?'<img src="'+PHOTOS[g.num]+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid rgba(134,239,172,0.3);">'
+          :'<div style="width:36px;height:36px;border-radius:50%;background:rgba(22,101,52,0.3);display:flex;align-items:center;justify-content:center;font-family:Bebas Neue,sans-serif;font-size:14px;color:#86efac;">'+g.num+'</div>')
+        +'<div style="flex:1;font-size:14px;color:rgba(255,255,255,0.8);">#'+g.num+' '+g.nom+'</div>'
+        +'<div style="font-family:Bebas Neue,sans-serif;font-size:32px;color:#86efac;">'+n+'</div>'
+        +'</div>';
+    }).join('');
+  } else {
+    gkCard.style.display = 'none';
+  }
+}
+
+function renderArchiveList() {
+  const el = document.getElementById('archive-list');
+  if (!archiveMatches.length) { el.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;font-size:14px;">Aucun match terminé pour le moment.</div>'; return; }
+  el.innerHTML = archiveMatches.map(m => {
+    const sh = m.score_home||0, sa = m.score_away||0;
+    const result = sh>sa ? '#86efac' : (sh===sa ? '#fbbf24' : '#f87171');
+    const dateStr = m.date ? new Date(m.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}) : '';
+    return '<div class="tl-item" style="cursor:pointer;border-left-color:'+result+';" onclick="openArchiveMatch(\''+m.id+'\')">'
+      +'<div class="tl-score" style="color:'+result+';">'+sh+'–'+sa+'</div>'
+      +'<div style="flex:1;"><div style="font-size:14px;font-weight:600;color:#fff;">vs '+(m.adversaire||'Adversaire')+'</div>'
+      +'<div style="font-size:11px;color:var(--gray);">'+dateStr+(m.lieu?' · '+m.lieu:'')+'</div></div>'
+      +'<div style="color:rgba(255,255,255,0.3);font-size:18px;">›</div></div>';
+  }).join('');
+}
+
+function openArchiveMatch(id) {
+  const m = archiveMatches.find(x => String(x.id)===String(id));
+  if (!m) return;
+  document.getElementById('archive-list-card').style.display = 'none';
+  document.getElementById('archive-detail-card').style.display = 'block';
+  const dateStr = m.date ? new Date(m.date).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) : '';
+  document.getElementById('archive-detail-header').innerHTML =
+    '<div style="text-align:center;">'
+    +'<div class="team-badge-pill">HBC LEGÉ vs '+(m.adversaire||'Adversaire')+'</div>'
+    +'<div style="font-family:Bebas Neue,sans-serif;font-size:40px;color:var(--red-light);">'+(m.score_home||0)+' – '+(m.score_away||0)+'</div>'
+    +'<div style="font-size:12px;color:var(--gray);">'+dateStr+(m.lieu?' · 📍 '+m.lieu:'')+'</div></div>';
+  const goals = m.goals || [];
+  const tl = document.getElementById('archive-detail-timeline');
+  tl.innerHTML = goals.length ? [...goals].reverse().map(g => {
+    const isAway = g.team==='away';
+    const photoEl = !isAway && PHOTOS[g.joueur_num] ? '<img src="'+PHOTOS[g.joueur_num]+'" style="width:30px;height:30px;border-radius:50%;object-fit:cover;border:2px solid rgba(200,16,46,0.5);flex-shrink:0;">' : '';
+    return '<div class="tl-item" style="border-left-color:'+(isAway?'#ff6b6b':'var(--red)')+';">'
+      +'<div class="tl-score" style="color:'+(isAway?'#ff6b6b':'var(--red-light)')+';">'+g.score_home+'–'+g.score_away+'</div>'
+      +photoEl
+      +'<div><div style="font-size:13px;font-weight:600;color:#fff;">'+(isAway?'⚽ ':'#'+g.joueur_num+' ')+g.joueur_nom+'</div>'
+      +'<div style="font-size:11px;color:var(--gray);">'+(g.half===1?'1ère mi-temps':'2ème mi-temps')+'</div></div></div>';
+  }).join('') : '<div style="text-align:center;color:rgba(255,255,255,0.3);padding:12px;font-size:13px;">Aucun but</div>';
+  const det = m.arrets_detail || {};
+  const gkEl = document.getElementById('archive-detail-gk');
+  const gkRows = GARDIENS.map(g => {
+    const n = det[g.num]||0;
+    if (!n) return '';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;">'
+      +(PHOTOS[g.num]?'<img src="'+PHOTOS[g.num]+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">':'')
+      +'<div style="flex:1;font-size:13px;color:rgba(255,255,255,0.8);">#'+g.num+' '+g.nom+'</div>'
+      +'<div style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#86efac;">'+n+'</div></div>';
+  }).join('');
+  gkEl.innerHTML = gkRows ? '<div class="card-title" style="margin-top:14px;">🧤 ARRÊTS</div>'+gkRows : '';
+}
+
+function closeArchiveDetail() {
+  document.getElementById('archive-list-card').style.display = 'block';
+  document.getElementById('archive-detail-card').style.display = 'none';
+}
+
 // ─── FLASH / NOTIF ───────────────────────────────────────────
 function triggerFlash(title, sub, score, bg, photoUrl) {
   document.getElementById('gf-title').textContent = title;
@@ -872,8 +1020,8 @@ function sendNotif(title, body) {
 // ─── NAV ─────────────────────────────────────────────────────
 function initNav() {
   const pages = userRole==='reporter'
-    ? [{id:'setup',icon:'⚙',label:'SETUP'},{id:'live',icon:'🎙',label:'LIVE'},{id:'score',icon:'📊',label:'STATS'},{id:'history',icon:'📋',label:'BUTS'}]
-    : [{id:'score',icon:'📊',label:'STATS'},{id:'history',icon:'📋',label:'BUTS'}];
+    ? [{id:'setup',icon:'⚙',label:'SETUP'},{id:'live',icon:'🎙',label:'LIVE'},{id:'score',icon:'📊',label:'STATS'},{id:'history',icon:'📋',label:'BUTS'},{id:'archive',icon:'📅',label:'HISTO'}]
+    : [{id:'score',icon:'📊',label:'STATS'},{id:'history',icon:'📋',label:'BUTS'},{id:'archive',icon:'📅',label:'HISTO'}];
   document.getElementById('bottom-nav').innerHTML = pages.map(p=>`<button class="nav-item" id="nav-${p.id}" onclick="switchPage('${p.id}')"><span class="nav-icon">${p.icon}</span>${p.label}</button>`).join('');
   switchPage(userRole==='reporter' ? (match?'live':'setup') : 'score');
 }
@@ -883,6 +1031,7 @@ function switchPage(id) {
   const p=document.getElementById('page-'+id); if(p) p.style.display='block';
   const b=document.getElementById('nav-'+id); if(b) b.classList.add('active');
   updateUI();
+  if (id === 'archive') loadArchivePage();
 }
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
