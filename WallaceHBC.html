@@ -80,6 +80,14 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--white);mi
 @keyframes scale-in{from{transform:scale(0.5);}to{transform:scale(1);}}
 .goal-flash-sub{font-size:30px;color:#fff;font-weight:700;text-align:center;text-shadow:0 2px 12px rgba(0,0,0,0.6);}
 .timeline{display:flex;flex-direction:column;gap:8px;}
+.court-wrap{position:relative;width:100%;max-width:320px;margin:0 auto;}
+.court-svg{width:100%;display:block;}
+.compo-label{position:absolute;transform:translate(-50%,-50%);text-align:center;width:76px;}
+.compo-pos-name{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,0.4);font-style:italic;margin-bottom:2px;}
+.compo-photo{width:30px;height:30px;border-radius:50%;object-fit:cover;border:2px solid rgba(200,16,46,0.5);margin:0 auto 2px;display:block;background:rgba(200,16,46,0.25);}
+.compo-photo-placeholder{display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:13px;color:#fff;}
+.compo-player-name{font-size:11px;font-weight:700;color:#fff;line-height:1.2;}
+.compo-player-name.compo-empty{color:rgba(255,255,255,0.25);font-weight:400;}
 .tl-item{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--dark);border-radius:8px;border-left:3px solid var(--red);}
 .tl-score{font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--red-light);min-width:44px;}
 .stats-grid{display:flex;flex-direction:column;gap:6px;}
@@ -304,6 +312,13 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--white);mi
         </div>
       </div>
     </div>
+
+    <!-- PAGE COMPOSITION -->
+    <div id="page-compo" class="page" style="display:none;">
+      <div class="content">
+        <div id="compo-content"></div>
+      </div>
+    </div>
   </div>
   <nav class="bottom-nav" id="bottom-nav"></nav>
 </div>
@@ -378,9 +393,18 @@ const JOUEURS = [
   {num:52, nom:'Timéo'},
 ];
 const GARDIENS = JOUEURS.filter(j => j.gardien);
+const POSITIONS = [
+  {key:'pivot', label:'Pivot', x:50, y:56},
+  {key:'aig', label:'Ailier G', x:18, y:66},
+  {key:'dc', label:'Demi-Centre', x:50, y:66},
+  {key:'aid', label:'Ailier D', x:82, y:66},
+  {key:'ag', label:'Arrière G', x:33, y:78},
+  {key:'ad', label:'Arrière D', x:67, y:78},
+  {key:'gardien', label:'Gardien', x:50, y:92},
+];
 
 let userRole = 'spectateur';
-let match = null, goals = [], sanctions = [];
+let match = null, goals = [], sanctions = [], compo = {};
 let half = 1;
 let pollInterval = null, presenceId = null, presenceInterval = null;
 const VIEWERS_BOOST = 15;
@@ -609,6 +633,7 @@ async function loadMatch() {
   const rows = await sbFetch('GET', '/rest/v1/hbc_match?team=eq.U16A&order=created_at.desc&limit=1', null);
   if (rows && rows.length > 0) {
     match = rows[0]; goals = rows[0].goals || []; half = rows[0].half || 1;
+    compo = rows[0].composition || {};
     restoreChronoFromMatch(rows[0]);
   }
   if (pollInterval) clearInterval(pollInterval);
@@ -623,9 +648,15 @@ async function pollMatch() {
   const oldGoalsCount = goals.length;
   const oldStatus = match?.status;
   const oldHalf = match?.half;
+  const oldCompo = JSON.stringify(compo||{});
   match = rows[0]; goals = rows[0].goals || []; half = rows[0].half || 1;
   // Sync chrono pour spectateurs
   if (userRole === 'spectateur') {
+    if (JSON.stringify(rows[0].composition||{}) !== oldCompo) {
+      compo = rows[0].composition || {};
+      const cp = document.getElementById('page-compo');
+      if (cp && cp.style.display === 'block') renderCompoPage();
+    }
     if (match.chrono_remaining !== null && match.chrono_remaining !== undefined) {
       if (match.chrono_running && match.chrono_saved_at) {
         const elapsed = Math.floor((Date.now() - new Date(match.chrono_saved_at).getTime()) / 1000);
@@ -875,6 +906,66 @@ function updateUI() {
   }
 }
 
+// ─── COMPOSITION D'ÉQUIPE ────────────────────────────────────
+function renderCompoPage() {
+  const el = document.getElementById('compo-content');
+  if (!el) return;
+  let html = '';
+  if (userRole === 'reporter') {
+    html += '<div class="card"><div class="card-title">🧑‍🤝‍🧑 COMPOSITION DE L\'ÉQUIPE</div>';
+    if (!match) {
+      html += '<div style="text-align:center;color:rgba(255,255,255,0.3);padding:12px;font-size:13px;">Lancez un match pour définir la composition.</div>';
+    } else {
+      POSITIONS.forEach(p => {
+        const list = p.key === 'gardien' ? GARDIENS : JOUEURS;
+        const options = list.map(j => '<option value="'+j.num+'"'+(String(compo[p.key])===String(j.num)?' selected':'')+'>#'+j.num+' '+j.nom+'</option>').join('');
+        html += '<div class="field"><label>'+p.label+'</label><select id="compo-sel-'+p.key+'"><option value="">— Aucun —</option>'+options+'</select></div>';
+      });
+      html += '<button class="btn-primary" onclick="saveCompo()" style="margin-top:4px;">💾 Enregistrer la composition</button>';
+    }
+    html += '</div>';
+  }
+  html += '<div class="card"><div class="card-title">🏐 SUR LE TERRAIN</div>'+buildCourtHTML()+'</div>';
+  el.innerHTML = html;
+}
+
+function buildCourtHTML() {
+  const svg = '<svg class="court-svg" viewBox="0 0 340 300" xmlns="http://www.w3.org/2000/svg">'
+    +'<rect x="8" y="4" width="324" height="288" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="2"/>'
+    +'<line x1="8" y1="4" x2="332" y2="4" stroke="rgba(255,255,255,0.4)" stroke-width="3"/>'
+    +'<rect x="150" y="286" width="40" height="8" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>'
+    +'<path d="M 95 292 A 95 95 0 0 1 245 292" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="2"/>'
+    +'<path d="M 55 292 A 140 140 0 0 1 285 292" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2" stroke-dasharray="6,6"/>'
+    +'</svg>';
+  const labels = POSITIONS.map(p => {
+    const num = compo[p.key];
+    const j = num ? JOUEURS.find(x => String(x.num)===String(num)) : null;
+    const photoEl = j
+      ? (PHOTOS[j.num] ? '<img class="compo-photo" src="'+PHOTOS[j.num]+'">' : '<div class="compo-photo compo-photo-placeholder">'+j.num+'</div>')
+      : '';
+    const nameEl = j ? '<div class="compo-player-name">#'+j.num+' '+j.nom+'</div>' : '<div class="compo-player-name compo-empty">—</div>';
+    return '<div class="compo-label" style="left:'+p.x+'%;top:'+p.y+'%;">'
+      +'<div class="compo-pos-name">'+p.label+'</div>'+photoEl+nameEl+'</div>';
+  }).join('');
+  return '<div class="court-wrap">'+svg+labels+'</div>';
+}
+
+async function saveCompo() {
+  if (!match || !match.id) { showToast('Aucun match en cours'); return; }
+  const newCompo = {};
+  POSITIONS.forEach(p => {
+    const sel = document.getElementById('compo-sel-'+p.key);
+    if (sel && sel.value) newCompo[p.key] = sel.value;
+  });
+  const nums = Object.values(newCompo);
+  if (new Set(nums).size !== nums.length) showToast('⚠ Un joueur est sélectionné à plusieurs postes');
+  compo = newCompo;
+  await saveMatch({ composition: compo });
+  match.composition = compo;
+  renderCompoPage();
+  showToast('Composition enregistrée ✓');
+}
+
 // ─── ARCHIVES / STATS DE SAISON ─────────────────────────────
 let archiveMatches = [];
 async function loadArchivePage() {
@@ -1020,8 +1111,8 @@ function sendNotif(title, body) {
 // ─── NAV ─────────────────────────────────────────────────────
 function initNav() {
   const pages = userRole==='reporter'
-    ? [{id:'setup',icon:'⚙',label:'SETUP'},{id:'live',icon:'🎙',label:'LIVE'},{id:'score',icon:'📊',label:'STATS'},{id:'history',icon:'📋',label:'BUTS'},{id:'archive',icon:'📅',label:'HISTO'}]
-    : [{id:'score',icon:'📊',label:'STATS'},{id:'history',icon:'📋',label:'BUTS'},{id:'archive',icon:'📅',label:'HISTO'}];
+    ? [{id:'setup',icon:'⚙',label:'SETUP'},{id:'live',icon:'🎙',label:'LIVE'},{id:'compo',icon:'🧑‍🤝‍🧑',label:'COMPO'},{id:'score',icon:'📊',label:'STATS'},{id:'history',icon:'📋',label:'BUTS'},{id:'archive',icon:'📅',label:'HISTO'}]
+    : [{id:'compo',icon:'🧑‍🤝‍🧑',label:'COMPO'},{id:'score',icon:'📊',label:'STATS'},{id:'history',icon:'📋',label:'BUTS'},{id:'archive',icon:'📅',label:'HISTO'}];
   document.getElementById('bottom-nav').innerHTML = pages.map(p=>`<button class="nav-item" id="nav-${p.id}" onclick="switchPage('${p.id}')"><span class="nav-icon">${p.icon}</span>${p.label}</button>`).join('');
   switchPage(userRole==='reporter' ? (match?'live':'setup') : 'score');
 }
@@ -1032,6 +1123,7 @@ function switchPage(id) {
   const b=document.getElementById('nav-'+id); if(b) b.classList.add('active');
   updateUI();
   if (id === 'archive') loadArchivePage();
+  if (id === 'compo') renderCompoPage();
 }
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
