@@ -82,7 +82,7 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--white);mi
 .timeline{display:flex;flex-direction:column;gap:8px;}
 .court-wrap{position:relative;width:100%;max-width:320px;margin:0 auto;}
 .court-svg{width:100%;display:block;}
-.compo-label{position:absolute;transform:translate(-50%,-50%);text-align:center;width:76px;}
+.compo-label{position:absolute;transform:translate(-50%,-50%);text-align:center;width:88px;}
 .compo-pos-name{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,0.4);font-style:italic;margin-bottom:2px;}
 .compo-photo{width:30px;height:30px;border-radius:50%;object-fit:cover;border:2px solid rgba(200,16,46,0.5);margin:0 auto 2px;display:block;background:rgba(200,16,46,0.25);}
 .compo-photo-placeholder{display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:13px;color:#fff;}
@@ -394,13 +394,13 @@ const JOUEURS = [
 ];
 const GARDIENS = JOUEURS.filter(j => j.gardien);
 const POSITIONS = [
-  {key:'pivot', label:'Pivot', x:50, y:56},
-  {key:'aig', label:'Ailier G', x:18, y:66},
-  {key:'dc', label:'Demi-Centre', x:50, y:66},
-  {key:'aid', label:'Ailier D', x:82, y:66},
-  {key:'ag', label:'Arrière G', x:33, y:78},
-  {key:'ad', label:'Arrière D', x:67, y:78},
-  {key:'gardien', label:'Gardien', x:50, y:92},
+  {key:'pivot', label:'Pivot', x:50, y:42},
+  {key:'aig', label:'Ailier G', x:15, y:61},
+  {key:'dc', label:'Demi-Centre', x:50, y:61},
+  {key:'aid', label:'Ailier D', x:85, y:61},
+  {key:'ag', label:'Arrière G', x:31, y:79},
+  {key:'ad', label:'Arrière D', x:69, y:79},
+  {key:'gardien', label:'Gardien', x:50, y:95},
 ];
 
 let userRole = 'spectateur';
@@ -930,12 +930,12 @@ function renderCompoPage() {
 }
 
 function buildCourtHTML() {
-  const svg = '<svg class="court-svg" viewBox="0 0 340 300" xmlns="http://www.w3.org/2000/svg">'
-    +'<rect x="8" y="4" width="324" height="288" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="2"/>'
+  const svg = '<svg class="court-svg" viewBox="0 0 340 480" xmlns="http://www.w3.org/2000/svg">'
+    +'<rect x="8" y="4" width="324" height="472" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="2"/>'
     +'<line x1="8" y1="4" x2="332" y2="4" stroke="rgba(255,255,255,0.4)" stroke-width="3"/>'
-    +'<rect x="150" y="286" width="40" height="8" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>'
-    +'<path d="M 95 292 A 95 95 0 0 1 245 292" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="2"/>'
-    +'<path d="M 55 292 A 140 140 0 0 1 285 292" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2" stroke-dasharray="6,6"/>'
+    +'<rect x="150" y="468" width="40" height="8" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>'
+    +'<path d="M 95 476 A 95 95 0 0 1 245 476" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="2"/>'
+    +'<path d="M 55 476 A 140 140 0 0 1 285 476" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="2" stroke-dasharray="6,6"/>'
     +'</svg>';
   const labels = POSITIONS.map(p => {
     const num = compo[p.key];
