@@ -86,7 +86,12 @@ body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--white);mi
 .compo-pos-name{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,0.4);font-style:italic;margin-bottom:2px;}
 .compo-photo{width:30px;height:30px;border-radius:50%;object-fit:cover;border:2px solid rgba(200,16,46,0.5);margin:0;display:block;background:rgba(200,16,46,0.25);}
 .compo-photo-wrap{position:relative;width:30px;margin:0 auto 2px;}
-.compo-goal-badge{position:absolute;top:-4px;right:-7px;background:var(--red);color:#fff;width:16px;height:16px;border-radius:50%;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;border:1.5px solid var(--dark2);}
+.compo-goal-badge{position:absolute;top:-4px;right:-7px;color:#fff;width:16px;height:16px;border-radius:50%;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;border:1.5px solid var(--dark2);}
+.bench-wrap{display:flex;flex-wrap:wrap;gap:14px 10px;justify-content:center;padding-top:2px;}
+.bench-player{display:flex;flex-direction:column;align-items:center;width:60px;}
+.bench-photo{width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.18);display:block;background:rgba(255,255,255,0.08);}
+.bench-photo-placeholder{display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:14px;color:rgba(255,255,255,0.55);}
+.bench-name{font-size:10px;color:rgba(255,255,255,0.55);text-align:center;line-height:1.2;margin-top:2px;}
 .compo-photo-placeholder{display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:13px;color:#fff;}
 .compo-player-name{font-size:11px;font-weight:700;color:#fff;line-height:1.2;}
 .compo-player-name.compo-empty{color:rgba(255,255,255,0.25);font-weight:400;}
@@ -642,6 +647,7 @@ async function loadMatch() {
   pollInterval = setInterval(pollMatch, 5000);
   updateUI();
   document.getElementById('live-badge').style.display = match?.status === 'live' ? 'flex' : 'none';
+  refreshCompoIfVisible();
 }
 
 async function pollMatch() {
@@ -937,6 +943,7 @@ function renderCompoPage() {
     html += '</div>';
   }
   html += '<div class="card"><div class="card-title">🏐 SUR LE TERRAIN</div>'+buildCourtHTML()+'</div>';
+  html += '<div class="card"><div class="card-title">🪑 SUR LE BANC</div>'+buildBenchHTML()+'</div>';
   el.innerHTML = html;
 }
 
@@ -957,7 +964,8 @@ function buildCourtHTML() {
     const gs = j ? (gpMap[j.num]||0) : 0;
     const as = j && j.gardien ? (arrets[j.num]||0) : 0;
     const badgeCount = j && j.gardien ? as : gs;
-    const badgeEl = badgeCount ? '<div class="compo-goal-badge">'+badgeCount+'</div>' : '';
+    const badgeColor = j && j.gardien ? '#16a34a' : 'var(--red)';
+    const badgeEl = badgeCount ? '<div class="compo-goal-badge" style="background:'+badgeColor+';">'+badgeCount+'</div>' : '';
     const photoEl = j
       ? '<div class="compo-photo-wrap">'
         +(PHOTOS[j.num] ? '<img class="compo-photo" src="'+PHOTOS[j.num]+'">' : '<div class="compo-photo compo-photo-placeholder">'+j.num+'</div>')
@@ -968,6 +976,26 @@ function buildCourtHTML() {
       +'<div class="compo-pos-name">'+p.label+'</div>'+photoEl+nameEl+'</div>';
   }).join('');
   return '<div class="court-wrap">'+svg+labels+'</div>';
+}
+
+function buildBenchHTML() {
+  const selectedNums = new Set(Object.values(compo).map(String));
+  const bench = JOUEURS.filter(j => !selectedNums.has(String(j.num)));
+  if (!bench.length) {
+    return '<div style="text-align:center;color:rgba(255,255,255,0.3);padding:10px;font-size:12px;">Tout le monde est sur le terrain</div>';
+  }
+  const gpMap = {};
+  goals.forEach(g => { if (g.team !== 'away') gpMap[g.joueur_num] = (gpMap[g.joueur_num]||0)+1; });
+  const arrets = match?.arrets_detail || {};
+  return '<div class="bench-wrap">' + bench.map(j => {
+    const count = j.gardien ? (arrets[j.num]||0) : (gpMap[j.num]||0);
+    const badgeColor = j.gardien ? '#16a34a' : 'var(--red)';
+    const badgeEl = count ? '<div class="compo-goal-badge" style="background:'+badgeColor+';">'+count+'</div>' : '';
+    const photoEl = PHOTOS[j.num]
+      ? '<img class="bench-photo" src="'+PHOTOS[j.num]+'">'
+      : '<div class="bench-photo bench-photo-placeholder">'+j.num+'</div>';
+    return '<div class="bench-player"><div class="compo-photo-wrap" style="width:34px;">'+photoEl+badgeEl+'</div><div class="bench-name">#'+j.num+' '+j.nom+'</div></div>';
+  }).join('') + '</div>';
 }
 
 async function saveCompo() {
